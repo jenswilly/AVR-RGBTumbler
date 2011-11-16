@@ -12,6 +12,7 @@
 #include "calibration.h"
 #include <avr/eeprom.h>
 #include <util/delay.h>
+#include <math.h>
 
 // Macro for finding maximum of three values
 #define MAX3(x,y,z)	((y) >= (z) ? ((x) >= (y) ? (x) : (y)) : ((x) >= (z) ? (x) : (z)))
@@ -19,6 +20,7 @@
 // Macro for clamping values to accepted interval
 #define CLAMP(x, l, h)  (((x) > (h)) ? (h) : (((x) < (l)) ? (l) : (x)))
 
+// State var for calibrate/normal mode
 uint8_t EEMEM eeprom_calibrate;
 
 // Sensor calibration values m=midpoint, s=sensitivity
@@ -40,73 +42,85 @@ float sz = 0.0096375;
 // Watchdog timer interrupt
 ISR( WDT_vect )
 {
-	/// DEBUG: CPU active
-	PORTB |= (1<< PB0);
-	
 	// Get ADC values
 	uint16_t x, y, z;
 	float tmp;
 	
 	// AD channel 0 (PC0)
-	ADMUX &= 0xFC | 0b00;			// Mask bits 7:2 so we don't change them. And set bits 1:0 to active channel
-	ADCSRA |= (1<<ADSC);			// Start single conversion
-	while( ADCSRA & (1<<ADSC) )		// Wait until conversion is done
-		;
+	ADMUX = (ADMUX & 0xFC) | 0b00;			// Mask bits 7:2 so we don't change them. And set bits 1:0 to active channel
+	ADCSRA |= (1<<ADSC);					// Start single conversion
+	while( ADCSRA & (1<<ADSC) ) ;			// Wait until conversion is done
 	x = ADC;
 	
 	// AD channel 1 (PC1)
-	ADMUX &= 0xFC | 0b01;
-	ADCSRA |= (1<<ADSC);			// Start single conversion
-	while( ADCSRA & (1<<ADSC) );	// Wait until conversion is done
+	ADMUX = (ADMUX & 0xFC) | 0b01;
+	ADCSRA |= (1<<ADSC);					// Start single conversion
+	while( ADCSRA & (1<<ADSC) )	;			// Wait until conversion is done
 	y = ADC;
 	
 	// AD channel 2 (PC2)
-	ADMUX &= 0xFC | 0b10;
-	ADCSRA |= (1<<ADSC);			// Start single conversion
-	while( ADCSRA & (1<<ADSC) );	// Wait until conversion is done
+	ADMUX = (ADMUX & 0xFC) | 0b10;
+	ADCSRA |= (1<<ADSC);					// Start single conversion
+	while( ADCSRA & (1<<ADSC) ) ;			// Wait until conversion is done
 	z = ADC;
 	
+	/*
 	// Calc proportions
 	uint16_t max_value = MAX3( x, y, z );
 	/// TEMP: set max to max 10 bit input
 	max_value = 0x3FF;
-	
+	*/
 	// Set PWM values
 
 	// R=X
 	tmp = ((float)x - mx) * sx;				// Calculate force in Gs
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
-	OCR0A = (uint8_t)(((tmp+1)/2) * 255);	// Convert -1 to 1 -> 0 to 255
+//	OCR0A = (uint8_t)(((tmp+1)/2) * 255);	// Convert -1 to 1 -> 0 to 255
+	OCR0A = (uint8_t)(fabs(tmp) * 255);		// Convert to absolute and then to 0-255. I.e. -1 G is 100% and +1 G is 100% and 0 G is 0%
 	
 	// G=Y
 	tmp = ((float)y - my) * sy;				// Calculate force in Gs
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
-	OCR0B = (uint8_t)(((tmp+1)/2) * 255);	// Convert -1 to 1 -> 0 to 255
+	OCR0B = (uint8_t)(fabs(tmp) * 255);
 	
 	// B=Z
 	tmp = ((float)z - mz) * sz;				// Calculate force in Gs
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
-	OCR2B = (uint8_t)(((tmp+1)/2) * 255);	// Convert -1 to 1 -> 0 to 255
+	OCR2A = (uint8_t)(fabs(tmp) * 255);
 	
 	// And we're done – go to sleep again
 }
 
 int main(void)
 {
+	// OC0A, OC0B and OC2A as outputs
+	DDRD |= (1<< PD6) | (1<< PD5);
+	DDRB |= (1<< PB3);
+	
 	// Go to calibration mode?
+	eeprom_busy_wait();
 	uint8_t should_calibrate = eeprom_read_byte( &eeprom_calibrate );
 	if( should_calibrate == 1 || should_calibrate == 0xFF )	// 0xFF means uninitialized: so force calibration
 	{
-		// Yes: calibrate
+		/*
+		 * CALIBRATION MODE
+		 */
+
+		// Do the calibration stuff using Rolfe's magic math stuff
 		calibrate_setup();
 		calibrate();
 		
+		// Write calibration values to EEPROM
 		eeprom_write_float( &eeprom_mx, beta[0] );
 		eeprom_write_float( &eeprom_my, beta[1] );
 		eeprom_write_float( &eeprom_mz, beta[2] );
 		eeprom_write_float( &eeprom_sx, beta[3] );
 		eeprom_write_float( &eeprom_sy, beta[4] );
 		eeprom_write_float( &eeprom_sz, beta[5] );
+		
+		// Clear calibration mode var
+		eeprom_busy_wait();
+		eeprom_write_byte( &eeprom_calibrate, 0 );
 		
 		// Calibration done: keep flashing G LED
 		for( ;; )
@@ -118,34 +132,54 @@ int main(void)
 			_delay_ms( 200 );
 		}
 	}
-	
+
 	// No: don't calibrate. 
+
+	// Wait a little bit let the power switch debounce
+	_delay_ms( 50 );
+	
 	// Set calibrate bit to YES
+	eeprom_busy_wait();
 	eeprom_write_byte( &eeprom_calibrate, 1 );
+	// White light to indicate "switch off now to enter calibration mode"
+	PORTD |= (1<< PD6) | (1<< PD5);
+	PORTB |= (1<< PB3);
 	
 	// Wait 1 second
 	_delay_ms( 1000 );
 	
 	// Clear calibration var
+	eeprom_busy_wait();
 	eeprom_write_byte( &eeprom_calibrate, 0 );
 	
-	// Continue in normal mode:
+	// LED off
+	PORTD &= ~(1<< PD5) & ~(1<< PD6);
+	PORTB &= ~(1<< PB3);
+	_delay_ms( 1000 );
+	
+	
+	/*
+	 *	NORMAL MODE
+	 */
 	
 	// Read calibration values
+	// Wait until the EEPROM is ready before reading
+	eeprom_busy_wait();
 	mx = eeprom_read_float( &eeprom_mx );
+	eeprom_busy_wait();
 	my = eeprom_read_float( &eeprom_my );
+	eeprom_busy_wait();
 	mz = eeprom_read_float( &eeprom_mz );
+	eeprom_busy_wait();
 	sx = eeprom_read_float( &eeprom_sx );
+	eeprom_busy_wait();
 	sy = eeprom_read_float( &eeprom_sy );
+	eeprom_busy_wait();
 	sz = eeprom_read_float( &eeprom_sz );
-	
+
 	// Power-down unused stuff
 	PRR |= (1<< PRTWI) | (1<< PRTIM1) | (1<< PRSPI) | (1<< PRUSART0);	// Power-down TWI, Timer1, SPI and USART
-	ACSR |= (1<< ACD);														// Power-down analog comperator		
-	
-	// OC0A, OC0B and OC2A as outputs
-	DDRD |= (1<< PD6) | (1<< PD5);
-	DDRB |= (1<< PB3);
+	ACSR |= (1<< ACD);													// Power-down analog comperator		
 	
 	/// DEBUG: PB0 for CPU active pin -> output
 	DDRB |= (1<< PB0);
@@ -155,7 +189,7 @@ int main(void)
 	TCCR0B = (1<< CS01);	// ~3906 Hz
 	
 	// Set up Timer2 for PWM
-	TCCR2A = (1<< COM2A1) | (1<< WGM21) | (1<< WGM20);		// OC2A normal mode; fast PWM
+	TCCR2A = (1<< COM2A1) | (1<< WGM21) | (1<< WGM20);					// OC2A normal mode; fast PWM
 	TCCR2B = (1<< CS21);	// ~3906 Hz
 	
 	// Set up analog to digital converter
@@ -172,13 +206,11 @@ int main(void)
 	WDTCSR |= (1<< WDIE);	// Interrupt enabled, 2048 clock cycles (for 16 ms)
 	sei();					// Interrupts enabled
 	
-	// Main loop
+	// Main loop: do nothing but sleep since everything happens in the Watchdog interrupt
 	for( ;; )
 	{
 		// Enter idle mode. AD conversion and PWM adjust will take place in Watchdog interrupt
 		SMCR = (1<< SE);	// Sleep enable, idle mode
-		/// DEBUG: CPU off
-		PORTB &= ~(1<< PB0);
 		asm("sleep");		// Nighty, night, CPU
 	}
 

@@ -6,6 +6,8 @@
 //  Copyright (c) 2011 Greener Pastures. All rights reserved.
 //
 //	This is based on Rolfe Schmidt's work: http://chionophilous.wordpress.com/
+//	Truckloads of street cred and praise go to the snow-happy man.
+//
 //	Adapted from Arduino sketch to AVR Libc code by Jens W. Johannsen
 //	Accelerometer is assumed to be connected as follows:
 //		X-axis	ACD0
@@ -17,6 +19,7 @@
 //		R	PD6
 //		G	PD5
 //		B	PB3
+//	And they should already be configured as outputs
 //
 
 /*
@@ -64,19 +67,15 @@ void reset_calibration_matrices();
 
 uint16_t analogRead( uint8_t AD_channel )
 {
-	ADMUX &= 0xFC | ( 0x0F & AD_channel);	// Mask bits 7:2 so we don't change them. And set bits 1:0 to active channel
-	ADCSRA |= (1<<ADSC);					// Start single conversion
-	while( ADCSRA & (1<<ADSC) )				// Wait until conversion is done
-		;
-	return ADC;								// Return value
+	ADMUX = (ADMUX & 0xF0) | ( 0x0F & AD_channel);	// Mask bits 7:4 so we don't change them. And set bits 3:0 to active channel
+	ADCSRA |= (1<<ADSC);							// Start single conversion
+	while( ADCSRA & (1<<ADSC) )	;					// Wait until conversion is done
+
+	return ADC;										// Return value
 }
 
 void calibrate_setup()
 {
-	// Set LED pins as output
-	DDRB |= (1<< PB3);
-	DDRD |= (1<< PD5) | (1<< PD6);
-	
 	// Set up analog to digital converter
 	// By default set to use AREF and single-conversion mode
 	ADCSRA |= (1<< ADPS2) | (1<< ADPS1) | (1<< ADEN);	// Set prescaler 64 for 125 kHz @ 8 MHz system clock and enable
@@ -93,17 +92,18 @@ void calibrate_setup()
 
 	// Flash RGB pattern to indicate "Calibration mode"
 	PORTD |= (1<< PD6);
-	_delay_ms( 300 );
+	_delay_ms( 100 );
 	PORTD &= ~(1<< PD6);
 	
 	PORTD |= (1<< PD5);
-	_delay_ms( 300 );
+	_delay_ms( 100 );
 	PORTD &= ~(1<< PD5);
-	
+
 	PORTB |= (1<< PB3);
-	_delay_ms( 300 );
+	_delay_ms( 100 );
 	PORTB &= ~(1<< PB3);
-	
+
+	// Wait for the slow human to pay attention
 	_delay_ms( 1000 );
 
 	// Ready to calibrate
@@ -214,11 +214,7 @@ void take_sample(unsigned int* sample_out) {
 			
 			if(fail_count > success_count && i > 10) {
 				// we're failing too much, start over!
-				// Flash R LED three times to indicate "bad sample"
-				PORTD |= (1<< PD6);
-				_delay_ms( 100 );
-				PORTD &= ~(1<< PD6 );
-				_delay_ms( 100 );
+				// Flash R LED twice times to indicate "bad sample"
 				PORTD |= (1<< PD6);
 				_delay_ms( 100 );
 				PORTD &= ~(1<< PD6 );
@@ -239,11 +235,11 @@ void take_sample(unsigned int* sample_out) {
 			
 			// Flash G LED twice to indicate "good sample"
 			PORTD |= (1<< PD5);
-			_delay_ms( 100 );
+			_delay_ms( 200 );
 			PORTD &= ~(1<< PD5 );
-			_delay_ms( 100 );
+			_delay_ms( 200 );
 			PORTD |= (1<< PD5);
-			_delay_ms( 100 );
+			_delay_ms( 200 );
 			PORTD &= ~(1<< PD5 );
 			_delay_ms( 500 );
 		}
@@ -285,8 +281,8 @@ void update_calibration_matrices(const unsigned int* data) {
 }
 
 void compute_calibration_matrices() {
-    int i, j, k;
-    float dx, b;
+    int i; //, j, k;
+//    float dx, b;
 	
     reset_calibration_matrices();
     int ub = n_samp < samp_capacity ? n_samp : samp_capacity;
@@ -348,10 +344,3 @@ void calibrate_model() {
 		reset_calibration_matrices();
 	}
 }
-
-
-
-
-
-
-
