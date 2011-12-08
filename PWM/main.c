@@ -21,10 +21,41 @@
 #define CLAMP(x, l, h)  (((x) > (h)) ? (h) : (((x) < (l)) ? (l) : (x)))
 
 // Smoothing value for low-pass filter
-#define ALPHA 0.3
+#define ALPHA 0.2
 
 // Snap tolerance
 #define SNAP_LIMIT 0.1
+
+// Minimum OCRxx value. If value is below this, the LED will be switched off
+#define LED_MIN 5
+#define LED_MINCOUNT 25
+
+#define SNAP( counter_, stateCounter_, stateOn_, TCCR_, COM_, PORT_, BIT_ ) if( counter_ < LED_MIN ) \
+{ \
+stateCounter_ = 0; \
+if( stateOn_ ) \
+{ \
+TCCR_ &= ~(1<< COM_); \
+PORT_ &= ~(1<< BIT_); \
+stateOn_ = 0; \
+} \
+} \
+if( !stateOn_ && counter_ > LED_MIN ) \
+{ \
+stateCounter_++; \
+if( stateCounter_ >= LED_MINCOUNT ) \
+{ \
+TCCR_ |= (1<< COM_); \
+stateOn_ = 1; \
+} \
+}
+
+uint8_t stateROn=1;
+uint8_t stateRCnt=0;
+uint8_t stateGOn=1;
+uint8_t stateGCnt=0;
+uint8_t stateBOn=1;
+uint8_t stateBCnt=0;
 
 // State var for calibrate/normal mode
 uint8_t EEMEM eeprom_calibrate;
@@ -102,13 +133,76 @@ ISR( WDT_vect )
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
 	prevX = lowPass( tmp, prevX, ALPHA );	// Low-pass
 	OCR0A = (uint8_t)(fabs(prevX) * 255);	// Convert to absolute and then to 0-255. I.e. -1 G is 100% and +1 G is 100% and 0 G is 0%
-	
+	SNAP( OCR0A, stateGCnt, stateGOn, TCCR0A, COM0A1, PORTD, PD6 );
+	/*
+	// Is LED value below threshold?
+	if( OCR0A < LED_MIN )
+	{
+		// Yes: reset state change counter
+		stateGCnt = 0;
+		
+		// Is LED currently on?
+		if( stateGOn )
+		{
+			// Yes: switch off immediately
+			TCCR0A &= ~(1<< COM0A1);
+			PORTD &= ~(1<< PD6);
+			stateGOn = 0;
+		}
+	}
+	// Is LED off and value is above threshold?
+	if( !stateGOn && OCR0A > LED_MIN )
+	{
+		// Yes, we are above the threshold and LED is off: increase state change counter
+		stateGCnt++;
+		
+		// Do we have enough samples to change state?
+		if( stateGCnt >= LED_MINCOUNT )
+		{
+			// Yes: switch on
+			TCCR0A |= (1<< COM0A1);
+			stateGOn = 1;
+		}
+	}
+	*/
 	// B=Y – OCR0B/PD5
 	tmp = ((float)y - my) * sy;				// Calculate force in Gs
 	tmp = snap( tmp, 1 );
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
 	prevY = lowPass( tmp, prevY, ALPHA );	// Low-pass
 	OCR0B = (uint8_t)(fabs(prevY) * 255);
+	SNAP( OCR0B, stateBCnt, stateBOn, TCCR0A, COM0B1, PORTD, PD5 );
+	/*
+	// Is LED value below threshold?
+	if( OCR0B < LED_MIN )
+	{
+		// Yes: reset state change counter
+		stateBCnt = 0;
+		
+		// Is LED currently on?
+		if( stateBOn )
+		{
+			// Yes: switch off immediately
+			TCCR0A &= ~(1<< COM0B1);
+			PORTD &= ~(1<< PD5);
+			stateBOn = 0;
+		}
+	}
+	// Is LED off and value is above threshold?
+	if( !stateBOn && OCR0B > LED_MIN )
+	{
+		// Yes, we are above the threshold and LED is off: increase state change counter
+		stateBCnt++;
+		
+		// Do we have enough samples to change state?
+		if( stateBCnt >= LED_MINCOUNT )
+		{
+			// Yes: switch on
+			TCCR0A |= (1<< COM0B1);
+			stateBOn = 1;
+		}
+	}
+	*/
 	
 	// R=Z – OCR2A/PB3
 	tmp = ((float)z - mz) * sz;				// Calculate force in Gs
@@ -116,7 +210,38 @@ ISR( WDT_vect )
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
 	prevZ = lowPass( tmp, prevZ, ALPHA );	// Low-pass
 	OCR2A = (uint8_t)(fabs(prevZ) * 255);
-	
+	SNAP( OCR2A, stateRCnt, stateROn, TCCR2A, COM2A1, PORTB, PB3 );
+	/*
+	// Is LED value below threshold?
+	if( OCR2A < LED_MIN )
+	{
+		// Yes: reset state change counter
+		stateRCnt = 0;
+
+		// Is LED currently on?
+		if( stateROn )
+		{
+			// Yes: switch off immediately
+			TCCR2A &= ~(1<< COM2A1);
+			PORTB &= ~(1<< PB3);
+			stateROn = 0;
+		}
+	}
+	// Is LED off and value is above threshold?
+	if( !stateROn && OCR2A > LED_MIN )
+	{
+		// Yes, we are above the threshold and LED is off: increase state change counter
+		stateRCnt++;
+		
+		// Do we have enough samples to change state?
+		if( stateRCnt >= LED_MINCOUNT )
+		{
+			// Yes: switch on
+			TCCR2A |= (1<< COM2A1);
+			stateROn = 1;
+		}
+	}
+	*/
 	// And we're done – go to sleep again
 }
 
@@ -195,15 +320,10 @@ int main(void)
 	// Wait until the EEPROM is ready before reading
 	eeprom_busy_wait();
 	mx = eeprom_read_float( &eeprom_mx );
-//	eeprom_busy_wait();
 	my = eeprom_read_float( &eeprom_my );
-//	eeprom_busy_wait();
 	mz = eeprom_read_float( &eeprom_mz );
-//	eeprom_busy_wait();
 	sx = eeprom_read_float( &eeprom_sx );
-//	eeprom_busy_wait();
 	sy = eeprom_read_float( &eeprom_sy );
-//	eeprom_busy_wait();
 	sz = eeprom_read_float( &eeprom_sz );
 
 	// Power-down unused stuff
