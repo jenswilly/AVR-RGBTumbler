@@ -92,15 +92,15 @@ void calibrate_setup()
 
 	// Flash RGB pattern to indicate "Calibration mode"
 	PORTD |= (1<< PD6);
-	_delay_ms( 100 );
+	_delay_ms( 200 );
 	PORTD &= ~(1<< PD6);
 	
 	PORTD |= (1<< PD5);
-	_delay_ms( 100 );
+	_delay_ms( 200 );
 	PORTD &= ~(1<< PD5);
 
 	PORTB |= (1<< PB3);
-	_delay_ms( 100 );
+	_delay_ms( 200 );
 	PORTB &= ~(1<< PB3);
 
 	// Wait for the slow human to pay attention
@@ -120,9 +120,9 @@ void calibrate()
 		// Flash B LED for four seconds to allow the user to position the sensor
 		for( i=0; i<4; i++ )
 		{
-			PORTB |= (1<< PB3);
+			PORTD |= (1<< PD5);
 			_delay_ms( 500 );
-			PORTB &= ~(1<< PB3);
+			PORTD &= ~(1<< PD5);
 			_delay_ms( 500 );
 		}
 		
@@ -215,13 +215,13 @@ void take_sample(unsigned int* sample_out) {
 			if(fail_count > success_count && i > 10) {
 				// we're failing too much, start over!
 				// Flash R LED twice times to indicate "bad sample"
-				PORTD |= (1<< PD6);
+				PORTB |= (1<< PB3);
 				_delay_ms( 100 );
-				PORTD &= ~(1<< PD6 );
+				PORTB &= ~(1<< PB3 );
 				_delay_ms( 100 );
-				PORTD |= (1<< PD6);
+				PORTB |= (1<< PB3);
 				_delay_ms( 100 );
-				PORTD &= ~(1<< PD6 );
+				PORTB &= ~(1<< PB3 );
 				_delay_ms( 100 );
 				break;
 			} 
@@ -234,13 +234,13 @@ void take_sample(unsigned int* sample_out) {
 			success = 1;
 			
 			// Flash G LED twice to indicate "good sample"
-			PORTD |= (1<< PD5);
+			PORTD |= (1<< PD6);
 			_delay_ms( 200 );
-			PORTD &= ~(1<< PD5 );
+			PORTD &= ~(1<< PD6 );
 			_delay_ms( 200 );
-			PORTD |= (1<< PD5);
+			PORTD |= (1<< PD6);
 			_delay_ms( 200 );
-			PORTD &= ~(1<< PD5 );
+			PORTD &= ~(1<< PD6 );
 			_delay_ms( 500 );
 		}
 	}

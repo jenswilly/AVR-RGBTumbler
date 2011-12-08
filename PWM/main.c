@@ -20,6 +20,12 @@
 // Macro for clamping values to accepted interval
 #define CLAMP(x, l, h)  (((x) > (h)) ? (h) : (((x) < (l)) ? (l) : (x)))
 
+// Smoothing value for low-pass filter
+#define ALPHA 0.3
+
+// Snap tolerance
+#define SNAP_LIMIT 0.1
+
 // State var for calibrate/normal mode
 uint8_t EEMEM eeprom_calibrate;
 
@@ -38,6 +44,29 @@ float mz = 517.5350341;
 float sx = 0.0095106;
 float sy = 0.0094931;
 float sz = 0.0096375;
+
+// output for X, Y and Z (OCR values 0-255)
+float prevX;
+float prevY;
+float prevZ;
+
+// Low-pass filter
+float lowPass( float x, float y, float alpha )
+{
+	return y + alpha * (x-y);
+}
+
+// Return a value that is snapped towards +/- limit
+float snap( float value, float limit )
+{
+	if( value > limit-SNAP_LIMIT )
+		return limit;
+	
+	if( value < -limit+SNAP_LIMIT )
+		return -limit;
+	
+	return value;
+}
 
 // Watchdog timer interrupt
 ISR( WDT_vect )
@@ -64,29 +93,29 @@ ISR( WDT_vect )
 	while( ADCSRA & (1<<ADSC) ) ;			// Wait until conversion is done
 	z = ADC;
 	
-	/*
-	// Calc proportions
-	uint16_t max_value = MAX3( x, y, z );
-	/// TEMP: set max to max 10 bit input
-	max_value = 0x3FF;
-	*/
 	// Set PWM values
+	//	OCR0A = (uint8_t)(((tmp+1)/2) * 255);	// Convert -1 to 1 -> 0 to 255
 
-	// R=X
+	// G=X – OCR0A/PD6
 	tmp = ((float)x - mx) * sx;				// Calculate force in Gs
+	tmp = snap( tmp, 1 );
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
-//	OCR0A = (uint8_t)(((tmp+1)/2) * 255);	// Convert -1 to 1 -> 0 to 255
-	OCR0A = (uint8_t)(fabs(tmp) * 255);		// Convert to absolute and then to 0-255. I.e. -1 G is 100% and +1 G is 100% and 0 G is 0%
+	prevX = lowPass( tmp, prevX, ALPHA );	// Low-pass
+	OCR0A = (uint8_t)(fabs(prevX) * 255);	// Convert to absolute and then to 0-255. I.e. -1 G is 100% and +1 G is 100% and 0 G is 0%
 	
-	// G=Y
+	// B=Y – OCR0B/PD5
 	tmp = ((float)y - my) * sy;				// Calculate force in Gs
+	tmp = snap( tmp, 1 );
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
-	OCR0B = (uint8_t)(fabs(tmp) * 255);
+	prevY = lowPass( tmp, prevY, ALPHA );	// Low-pass
+	OCR0B = (uint8_t)(fabs(prevY) * 255);
 	
-	// B=Z
+	// R=Z – OCR2A/PB3
 	tmp = ((float)z - mz) * sz;				// Calculate force in Gs
+	tmp = snap( tmp, 1 );
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
-	OCR2A = (uint8_t)(fabs(tmp) * 255);
+	prevZ = lowPass( tmp, prevZ, ALPHA );	// Low-pass
+	OCR2A = (uint8_t)(fabs(prevZ) * 255);
 	
 	// And we're done – go to sleep again
 }
@@ -166,15 +195,15 @@ int main(void)
 	// Wait until the EEPROM is ready before reading
 	eeprom_busy_wait();
 	mx = eeprom_read_float( &eeprom_mx );
-	eeprom_busy_wait();
+//	eeprom_busy_wait();
 	my = eeprom_read_float( &eeprom_my );
-	eeprom_busy_wait();
+//	eeprom_busy_wait();
 	mz = eeprom_read_float( &eeprom_mz );
-	eeprom_busy_wait();
+//	eeprom_busy_wait();
 	sx = eeprom_read_float( &eeprom_sx );
-	eeprom_busy_wait();
+//	eeprom_busy_wait();
 	sy = eeprom_read_float( &eeprom_sy );
-	eeprom_busy_wait();
+//	eeprom_busy_wait();
 	sz = eeprom_read_float( &eeprom_sz );
 
 	// Power-down unused stuff
