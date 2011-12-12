@@ -17,11 +17,11 @@
 		47A796D9146EE5F20037CA69 = {
 			isa = PBXGroup;
 			children = (
-				47A796E3146EE5F20037CA69 /* PWM */,
+				47A796E3146EE5F20037CA69 /* RGBTumbler */,
 			);
 			sourceTree = "<group>";
 		};
-		47A796E3146EE5F20037CA69 /* PWM */ = {
+		47A796E3146EE5F20037CA69 /* RGBTumbler */ = {
 			isa = PBXGroup;
 			children = (
 				47A796E4146EE5F20037CA69 /* main.c */,
@@ -29,7 +29,7 @@
 				472849FF14727D2200A4ACA8 /* calibration.h */,
 				47A796E5146EE5F20037CA69 /* Makefile */,
 			);
-			path = PWM;
+			path = RGBTumbler;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -83,7 +83,7 @@
 				LastUpgradeCheck = 0420;
 				ORGANIZATIONNAME = "Greener Pastures";
 			};
-			buildConfigurationList = 47A796DE146EE5F20037CA69 /* Build configuration list for PBXProject "PWM" */;
+			buildConfigurationList = 47A796DE146EE5F20037CA69 /* Build configuration list for PBXProject "RGBTumbler" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
@@ -180,7 +180,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		47A796DE146EE5F20037CA69 /* Build configuration list for PBXProject "PWM" */ = {
+		47A796DE146EE5F20037CA69 /* Build configuration list for PBXProject "RGBTumbler" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				47A796E6146EE5F20037CA69 /* Debug */,

@@ -1,9 +1,9 @@
 /*
  *  main.c
- *  PWM
  *
  *  Created by Jens Willy Johannsen on 12-11-11.
- *  Copyright Greener Pastures 2011. All rights reserved.
+ *  Copyright (c) 2011 Jens Willy Johannsen
+ *	This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License. 
  *
  */
 
@@ -23,13 +23,21 @@
 // Smoothing value for low-pass filter
 #define ALPHA 0.2
 
-// Snap tolerance
-#define SNAP_LIMIT 0.1
-
 // Minimum OCRxx value. If value is below this, the LED will be switched off
 #define LED_MIN 5
-#define LED_MINCOUNT 25
+#define LED_MINCOUNT 12
 
+/* Snapping macro
+ * If the counter (OCRxx) value is below the threshold, the corresponding LED is turned off and PWM output is disabled, 
+ * the samples-above-threshold counter is reset and the stateOn is set to 0 (false).
+ * Every time we get a value below the threshold, the counter is reset to 0.
+ * If the value is above the threshold (and it doesn't matter if the OCRxx is set to a higher value since the PWM output has been disabled),
+ * the above-threshold counter is increased by 1.
+ * When the above-threshold counter is above the required count (LED_MINCOUNT), PWM output is enabled again and the stateOn is set to 1 (true).
+ *
+ * In other words: as soon as we get a sample value below the threshold, the LED is turned off. We will then need LED_MINCOUNT *consecutive*
+ * samples above the threshold for the LED to be turned on again.
+ */
 #define SNAP( counter_, stateCounter_, stateOn_, TCCR_, COM_, PORT_, BIT_ ) if( counter_ < LED_MIN ) \
 { \
 stateCounter_ = 0; \
@@ -87,19 +95,7 @@ float lowPass( float x, float y, float alpha )
 	return y + alpha * (x-y);
 }
 
-// Return a value that is snapped towards +/- limit
-float snap( float value, float limit )
-{
-	if( value > limit-SNAP_LIMIT )
-		return limit;
-	
-	if( value < -limit+SNAP_LIMIT )
-		return -limit;
-	
-	return value;
-}
-
-// Watchdog timer interrupt
+// Watchdog timer interrupt: main analog-to-digital conversion and acceleration-to-intensity calculation takes place here
 ISR( WDT_vect )
 {
 	// Get ADC values
@@ -125,123 +121,28 @@ ISR( WDT_vect )
 	z = ADC;
 	
 	// Set PWM values
-	//	OCR0A = (uint8_t)(((tmp+1)/2) * 255);	// Convert -1 to 1 -> 0 to 255
 
-	// G=X – OCR0A/PD6
+	// Green=X – OCR0A/PD6
 	tmp = ((float)x - mx) * sx;				// Calculate force in Gs
-	tmp = snap( tmp, 1 );
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
 	prevX = lowPass( tmp, prevX, ALPHA );	// Low-pass
 	OCR0A = (uint8_t)(fabs(prevX) * 255);	// Convert to absolute and then to 0-255. I.e. -1 G is 100% and +1 G is 100% and 0 G is 0%
 	SNAP( OCR0A, stateGCnt, stateGOn, TCCR0A, COM0A1, PORTD, PD6 );
-	/*
-	// Is LED value below threshold?
-	if( OCR0A < LED_MIN )
-	{
-		// Yes: reset state change counter
-		stateGCnt = 0;
-		
-		// Is LED currently on?
-		if( stateGOn )
-		{
-			// Yes: switch off immediately
-			TCCR0A &= ~(1<< COM0A1);
-			PORTD &= ~(1<< PD6);
-			stateGOn = 0;
-		}
-	}
-	// Is LED off and value is above threshold?
-	if( !stateGOn && OCR0A > LED_MIN )
-	{
-		// Yes, we are above the threshold and LED is off: increase state change counter
-		stateGCnt++;
-		
-		// Do we have enough samples to change state?
-		if( stateGCnt >= LED_MINCOUNT )
-		{
-			// Yes: switch on
-			TCCR0A |= (1<< COM0A1);
-			stateGOn = 1;
-		}
-	}
-	*/
-	// B=Y – OCR0B/PD5
+
+	// Blue=Y – OCR0B/PD5
 	tmp = ((float)y - my) * sy;				// Calculate force in Gs
-	tmp = snap( tmp, 1 );
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
 	prevY = lowPass( tmp, prevY, ALPHA );	// Low-pass
 	OCR0B = (uint8_t)(fabs(prevY) * 255);
 	SNAP( OCR0B, stateBCnt, stateBOn, TCCR0A, COM0B1, PORTD, PD5 );
-	/*
-	// Is LED value below threshold?
-	if( OCR0B < LED_MIN )
-	{
-		// Yes: reset state change counter
-		stateBCnt = 0;
-		
-		// Is LED currently on?
-		if( stateBOn )
-		{
-			// Yes: switch off immediately
-			TCCR0A &= ~(1<< COM0B1);
-			PORTD &= ~(1<< PD5);
-			stateBOn = 0;
-		}
-	}
-	// Is LED off and value is above threshold?
-	if( !stateBOn && OCR0B > LED_MIN )
-	{
-		// Yes, we are above the threshold and LED is off: increase state change counter
-		stateBCnt++;
-		
-		// Do we have enough samples to change state?
-		if( stateBCnt >= LED_MINCOUNT )
-		{
-			// Yes: switch on
-			TCCR0A |= (1<< COM0B1);
-			stateBOn = 1;
-		}
-	}
-	*/
 	
-	// R=Z – OCR2A/PB3
+	// Red=Z – OCR2A/PB3
 	tmp = ((float)z - mz) * sz;				// Calculate force in Gs
-	tmp = snap( tmp, 1 );
 	tmp = CLAMP( tmp, -1, 1 );				// Clamp to +/- 1G
 	prevZ = lowPass( tmp, prevZ, ALPHA );	// Low-pass
 	OCR2A = (uint8_t)(fabs(prevZ) * 255);
 	SNAP( OCR2A, stateRCnt, stateROn, TCCR2A, COM2A1, PORTB, PB3 );
-	/*
-	// Is LED value below threshold?
-	if( OCR2A < LED_MIN )
-	{
-		// Yes: reset state change counter
-		stateRCnt = 0;
 
-		// Is LED currently on?
-		if( stateROn )
-		{
-			// Yes: switch off immediately
-			TCCR2A &= ~(1<< COM2A1);
-			PORTB &= ~(1<< PB3);
-			stateROn = 0;
-		}
-	}
-	// Is LED off and value is above threshold?
-	if( !stateROn && OCR2A > LED_MIN )
-	{
-		// Yes, we are above the threshold and LED is off: increase state change counter
-		stateRCnt++;
-		
-		// Do we have enough samples to change state?
-		if( stateRCnt >= LED_MINCOUNT )
-		{
-			// Yes: switch on
-			TCCR2A |= (1<< COM2A1);
-			stateROn = 1;
-		}
-	}
-	*/
 	// And we're done – go to sleep again
 }
 
@@ -276,10 +177,10 @@ int main(void)
 		eeprom_busy_wait();
 		eeprom_write_byte( &eeprom_calibrate, 0 );
 		
-		// Calibration done: keep flashing G LED
+		// Calibration done: keep flashing B LED
 		for( ;; )
 		{
-			// Keep flashing G LED
+			// Keep flashing B LED
 			PORTD |= (1<< PD5);
 			_delay_ms( 200 );
 			PORTD &= ~(1<< PD5);

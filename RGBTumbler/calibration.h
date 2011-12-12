@@ -1,9 +1,9 @@
 //
 //  calibration.h
-//  PWM
 //
 //  Created by Jens Willy Johannsen on 15-11-11.
 //  Copyright (c) 2011 Greener Pastures. All rights reserved.
+//	This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License. 
 //
 
 #ifndef PWM_calibration_h

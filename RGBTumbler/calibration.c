@@ -1,11 +1,11 @@
 //
 //  calibration.c
-//  PWM
 //
 //  Created by Jens Willy Johannsen on 15-11-11.
-//  Copyright (c) 2011 Greener Pastures. All rights reserved.
+//  Copyright (c) 2011 Jens Willy Johannsen
+//	This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License. 
 //
-//	This is based on Rolfe Schmidt's work: http://chionophilous.wordpress.com/
+//	Based on Rolfe Schmidt's work: http://chionophilous.wordpress.com/
 //	Truckloads of street cred and praise go to the snow-happy man.
 //
 //	Adapted from Arduino sketch to AVR Libc code by Jens W. Johannsen
@@ -16,9 +16,9 @@
 //	And the AREF must be connected to the ADXL335's supply voltage
 //	
 //	Three LEDs (R, G, B) are assumed to be connected as follows:
-//		R	PD6
-//		G	PD5
-//		B	PB3
+//		R	PB3
+//		G	PD6
+//		B	PD5
 //	And they should already be configured as outputs
 //
 

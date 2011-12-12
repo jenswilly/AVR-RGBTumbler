@@ -1,7 +1,8 @@
 #  PWM
 #
 #  Created by Jens Willy Johannsen on 12-11-11.
-#  Copyright Greener Pastures 2011. All rights reserved.
+#  Copyright (c) 2011 Jens Willy Johannsen
+#  This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License. 
 
 # This is a prototype Makefile. Modify it according to your needs.
 # You should at least check the settings for
